@@ -1,8 +1,11 @@
 // 🔧 تحميل الإعدادات (البوت + قاعدة البيانات)
 require('./config/config');
 
-// 🎯 تشغيل نظام التسجيل
+// 🎯 نظام تسجيل اللاعبين
 require('./handlers/registerHandler');
 
-// 🚀 رسالة تشغيل في الكونسول
+// 👑 لوحة الأدمن
+require('./adminHandlers/adminPanel');
+
+// 🚀 رسالة تشغيل
 console.log("🚀 SpinX Bot is running...");
