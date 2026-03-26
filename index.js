@@ -1,7 +1,8 @@
-const TelegramBot = require('node-telegram-bot-api');
+// 🔧 تحميل الإعدادات (البوت + قاعدة البيانات)
+require('./config/config');
 
-const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
+// 🎯 تشغيل نظام التسجيل
+require('./handlers/registerHandler');
 
-bot.on('message', (msg) => {
-  bot.sendMessage(msg.chat.id, "البوت يعمل بنجاح 🚀");
-});
+// 🚀 رسالة تشغيل في الكونسول
+console.log("🚀 SpinX Bot is running...");
