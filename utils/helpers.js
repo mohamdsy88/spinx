@@ -1,26 +1,25 @@
-// 🎲 توليد ID عشوائي من 6 أرقام
 function generateUserId() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// 💰 تنسيق الرصيد بالدولار
 function formatUSD(amount) {
-  return `${amount} USD 💵`;
+  const num = Number(amount) || 0;
+  return `${num.toFixed(2)} USD 💵`;
 }
 
-// ⏰ تنسيق التاريخ والوقت
 function formatDate(date = new Date()) {
-  return date.toLocaleString("en-US", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit"
+  return date.toLocaleString('ar-SA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
   });
 }
 
-module.exports = {
-  generateUserId,
-  formatUSD,
-  formatDate
-};
+function generateRequestId() {
+  return 'REQ' + Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+module.exports = { generateUserId, formatUSD, formatDate, generateRequestId };
