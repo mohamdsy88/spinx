@@ -1,127 +1,148 @@
 const { bot, ADMIN_ID } = require('../config/config');
 const { getUserByTelegramId, getUserByUniqueId, createPlayer } = require('../services/userService');
-const { startRegisterKeyboard, phoneKeyboard } = require('../keyboards/mainKeyboard');
-const { formatUSD } = require('../utils/helpers');
+const { startRegisterKeyboard, phoneKeyboard, removeKeyboard, playerKeyboard } = require('../keyboards/mainKeyboard');
+const { formatUSD, formatDate } = require('../utils/helpers');
 
-// 🧠 تخزين مؤقت للتسجيل
 const registerSessions = {};
 
-// ▶️ عند /start
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
+  const existingUser = await getUserByTelegramId(msg.from.id);
 
-  const user = await getUserByTelegramId(chatId);
-
-  if (user) {
-    return bot.sendMessage(chatId, "✅ أنت مسجل بالفعل");
+  if (existingUser) {
+    if (existingUser.is_blocked) {
+      return bot.sendMessage(chatId, '🚫 حسابك في مرحلة التجميد\nالرجاء التواصل مع الإدارة');
+    }
+    return bot.sendMessage(chatId, `✅ أنت مسجل بالفعل في SpinX\n\n🆔 ايديك: ${existingUser.unique_id}\n💰 رصيدك: ${formatUSD(existingUser.balance)}`);
   }
 
-  bot.sendMessage(
-    chatId,
-    `🎮 مرحباً بك في SpinX
+  bot.sendMessage(chatId,
+    `🎮 *مرحباً بك في SpinX!*
 
-📜 وصف اللعبة:
-نظام مراهنات رقمي باستخدام الدولار الأمريكي 💵
+━━━━━━━━━━━━━━━━━
+🎰 *وصف اللعبة:*
+نظام مراهنات رقمي يعمل عبر تيليغرام باستخدام الدولار الأمريكي 💵
 
-⚖️ باستخدامك للبوت أنت توافق على جميع الشروط
+🏗️ *هيكل النظام:*
+👑 الإدارة الرئيسية — الإشراف الكامل
+🧑‍💼 الوكلاء — إدارة حسابات اللاعبين
+🎮 اللاعبون — المشاركة والمراهنة
 
-👇 اضغط لبدء التسجيل`,
-    startRegisterKeyboard()
+📜 *القواعد الأساسية:*
+• تقديم معلومات صحيحة عند التسجيل
+• حساب واحد لكل شخص فقط
+• جميع العمليات المالية عبر الوكيل
+
+⚖️ *إخلاء المسؤولية:*
+• اللاعب مسؤول كامل عن قراراته
+• الإدارة غير مسؤولة عن الخسائر
+• قرارات الإدارة نهائية وغير قابلة للطعن
+
+🔒 بالضغط على زر التسجيل أنت توافق على جميع الشروط
+
+👇 *اضغط لبدء التسجيل*`,
+    { parse_mode: 'Markdown', ...startRegisterKeyboard() }
   );
 });
 
-// 🎯 زر بدء التسجيل
 bot.on('callback_query', async (query) => {
+  if (query.data !== 'start_register') return;
   const chatId = query.message.chat.id;
-
-  if (query.data === "start_register") {
-    registerSessions[chatId] = {};
-
-    bot.sendMessage(chatId, "📨 الرجاء ارسل ايدي الوكيل المسؤول عن حسابك");
-  }
+  await bot.answerCallbackQuery(query.id);
+  const existingUser = await getUserByTelegramId(query.from.id);
+  if (existingUser) return bot.sendMessage(chatId, '✅ أنت مسجل بالفعل في SpinX');
+  registerSessions[chatId] = {};
+  bot.sendMessage(chatId,
+    `📝 *خطوة 1 من 3*\n\n🧑‍💼 الرجاء أرسل ايدي الوكيل المسؤول عن حسابك\n_(الايدي مكون من 6 أرقام)_`,
+    { parse_mode: 'Markdown', ...removeKeyboard() }
+  );
 });
 
-// 📩 استقبال الرسائل
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
-
-  // ❌ تجاهل إذا مو داخل تسجيل
   if (!registerSessions[chatId]) return;
-
   const session = registerSessions[chatId];
 
-  // 1️⃣ إدخال ID الوكيل
+  // الخطوة 1: ايدي الوكيل
   if (!session.agent) {
-    const agent = await getUserByUniqueId(msg.text);
-
+    if (!msg.text) return;
+    const agent = await getUserByUniqueId(msg.text.trim());
     if (!agent || agent.role !== 'agent') {
-      return bot.sendMessage(chatId, "❌ هذا الايدي غير موجود، تحقق من الوكيل");
+      return bot.sendMessage(chatId, `❌ *هذا الايدي غير موجود!*\n\nالرجاء التحقق من الوكيل ليمنحك الايدي الصحيح`, { parse_mode: 'Markdown' });
     }
-
     session.agent = agent;
-
-    return bot.sendMessage(
-      chatId,
-      `✅ الوكيل موجود: ${agent.full_name || 'بدون اسم'}
-
-✍️ الرجاء ارسل اسمك الكامل`
+    return bot.sendMessage(chatId,
+      `✅ *الوكيل موجود!*\n\n🧑‍💼 اسم الوكيل: ${agent.full_name || 'غير محدد'}\n\n📝 *خطوة 2 من 3*\n✍️ الرجاء أرسل اسمك الكامل`,
+      { parse_mode: 'Markdown' }
     );
   }
 
-  // 2️⃣ إدخال الاسم
+  // الخطوة 2: الاسم الكامل
   if (!session.full_name) {
-    session.full_name = msg.text;
-
-    return bot.sendMessage(
-      chatId,
-      "📱 الرجاء شارك رقم هاتفك",
-      phoneKeyboard()
+    if (!msg.text || msg.text.trim().length < 2) return bot.sendMessage(chatId, '❌ الاسم قصير جداً، الرجاء إدخال اسمك الكامل');
+    session.full_name = msg.text.trim();
+    return bot.sendMessage(chatId,
+      `✅ تم حفظ الاسم: *${session.full_name}*\n\n📝 *خطوة 3 من 3*\n📱 الرجاء شارك رقم هاتفك بالضغط على الزر أدناه`,
+      { parse_mode: 'Markdown', ...phoneKeyboard() }
     );
   }
 
-  // 3️⃣ استقبال رقم الهاتف
+  // الخطوة 3: رقم الهاتف
   if (!session.phone && msg.contact) {
     session.phone = msg.contact.phone_number;
+    try {
+      const newUser = await createPlayer({
+        telegram_id: msg.from.id,
+        full_name: session.full_name,
+        phone: session.phone,
+        agent_id: session.agent.id
+      });
+      delete registerSessions[chatId];
+      const now = formatDate();
 
-    // ✅ إنشاء اللاعب
-    const newUser = await createPlayer({
-      telegram_id: chatId,
-      full_name: session.full_name,
-      phone: session.phone,
-      agent_id: session.agent.id
-    });
+      bot.sendMessage(chatId,
+        `🎉 *تم تسجيلك بنجاح في SpinX!*
 
-    delete registerSessions[chatId];
-
-    // 🎉 إشعار اللاعب
-    bot.sendMessage(
-      chatId,
-      `✅ تم تسجيلك بنجاح 🎉
-
+━━━━━━━━━━━━━━━━━
 👤 الاسم: ${newUser.full_name}
-🆔 ايديك: ${newUser.unique_id}
-🧑‍💼 الوكيل: ${session.agent.full_name || 'بدون اسم'}
-💰 الرصيد: ${formatUSD(newUser.balance)}`
-    );
+🆔 ايديك الخاص: \`${newUser.unique_id}\`
+🧑‍💼 الوكيل: ${session.agent.full_name || 'غير محدد'} (\`${session.agent.unique_id}\`)
+💰 رصيدك الحالي: ${formatUSD(newUser.balance)}
+━━━━━━━━━━━━━━━━━
+⏰ ${now}
 
-    // 👑 إشعار الأدمن
-    bot.sendMessage(
-      ADMIN_ID,
-      `🚨 لاعب جديد
+🔥 استعد للعب وابدأ رحلتك مع SpinX!`,
+        { parse_mode: 'Markdown', ...playerKeyboard() }
+      );
 
-👤 ${newUser.full_name}
-📞 ${session.phone}
-🆔 ${newUser.unique_id}
-🧑‍💼 وكيله: ${session.agent.unique_id}`
-    );
+      bot.sendMessage(ADMIN_ID,
+        `🚨 *لاعب جديد انضم للعبة!*
 
-    // 🧑‍💼 إشعار الوكيل
-    bot.sendMessage(
-      session.agent.telegram_id,
-      `🎉 لاعب جديد انضم إليك
+━━━━━━━━━━━━━━━━━
+👤 الاسم: ${newUser.full_name}
+📞 رقم الهاتف: ${session.phone}
+🆔 ايدي اللاعب: \`${newUser.unique_id}\`
+🧑‍💼 الوكيل: ${session.agent.full_name || 'غير محدد'} (\`${session.agent.unique_id}\`)
+📅 تاريخ التسجيل: ${now}
+━━━━━━━━━━━━━━━━━`,
+        { parse_mode: 'Markdown' }
+      );
 
-👤 ${newUser.full_name}
-🆔 ${newUser.unique_id}`
-    );
+      bot.sendMessage(session.agent.telegram_id,
+        `🎉 *لاعب جديد انضم إلى فريقك!*
+
+━━━━━━━━━━━━━━━━━
+👤 اسم اللاعب: ${newUser.full_name}
+🆔 ايدي اللاعب: \`${newUser.unique_id}\`
+📅 تاريخ الانضمام: ${now}
+━━━━━━━━━━━━━━━━━`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      delete registerSessions[chatId];
+      bot.sendMessage(chatId, `❌ حدث خطأ أثناء التسجيل، الرجاء المحاولة مرة أخرى\n\n/start`, removeKeyboard());
+    }
   }
 });
+
+module.exports = { registerSessions };
