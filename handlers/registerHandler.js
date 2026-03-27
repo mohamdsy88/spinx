@@ -1,20 +1,31 @@
 // handlers/registerHandler.js
 const { bot, ADMIN_ID }       = require('../config/config');
 const { getUserByTelegramId, getUserByUniqueId, createPlayer, getUserById } = require('../services/userService');
-const { startRegisterKeyboard, phoneKeyboard, removeKeyboard, playerKeyboard } = require('../keyboards/mainKeyboard');
+const { startRegisterKeyboard, phoneKeyboard, playerKeyboard, adminKeyboard } = require('../keyboards/mainKeyboard');
 const { formatUSD, formatDate } = require('../utils/helpers');
 const { getSession, setSession, deleteSession, updateSession } = require('../state/sessions');
 
 // ▶️ /start
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
+
+  // 👑 إذا كان الأدمن — أظهر لوحة الأدمن مباشرة
+  if (msg.from.id.toString() === ADMIN_ID.toString()) {
+    return bot.sendMessage(chatId,
+      "👑 *لوحة تحكم الأدمن — SpinX*\nأهلاً بك يا مدير اللعبة!",
+      { parse_mode: 'Markdown', ...adminKeyboard() });
+  }
+
   const existing = await getUserByTelegramId(chatId);
 
   if (existing) {
     if (existing.is_blocked) {
-      return bot.sendMessage(chatId, "🚫 حسابك في مرحلة التجميد\nالرجاء التواصل مع الإدارة");
+      return bot.sendMessage(chatId,
+        "🚫 حسابك في مرحلة التجميد\nالرجاء التواصل مع الإدارة");
     }
-    return bot.sendMessage(chatId, "✅ أنت مسجل بالفعل في SpinX\nاستخدم الأزرار أدناه للتنقل", playerKeyboard());
+    return bot.sendMessage(chatId,
+      "✅ أنت مسجل بالفعل في SpinX\nاستخدم الأزرار أدناه للتنقل",
+      playerKeyboard());
   }
 
   bot.sendMessage(
@@ -42,6 +53,11 @@ bot.on('callback_query', async (query) => {
   if (query.data !== 'start_register') return;
   const chatId = query.message.chat.id;
 
+  // تجاهل إذا كان الأدمن
+  if (chatId.toString() === ADMIN_ID.toString()) {
+    return bot.answerCallbackQuery(query.id);
+  }
+
   const existing = await getUserByTelegramId(chatId);
   if (existing) {
     return bot.answerCallbackQuery(query.id, { text: '✅ أنت مسجل بالفعل' });
@@ -49,7 +65,9 @@ bot.on('callback_query', async (query) => {
 
   setSession(chatId, { step: 'register_agent' });
   bot.answerCallbackQuery(query.id);
-  bot.sendMessage(chatId, "📨 الرجاء أرسل *ايدي الوكيل* المسؤول عن حسابك:", { parse_mode: 'Markdown' });
+  bot.sendMessage(chatId,
+    "📨 الرجاء أرسل *ايدي الوكيل* المسؤول عن حسابك:",
+    { parse_mode: 'Markdown' });
 });
 
 // 📩 رسائل التسجيل
@@ -101,7 +119,8 @@ bot.on('message', async (msg) => {
       });
     } catch (e) {
       deleteSession(chatId);
-      return bot.sendMessage(chatId, "❌ حدث خطأ أثناء التسجيل، حاول مرة أخرى لاحقاً");
+      return bot.sendMessage(chatId,
+        "❌ حدث خطأ أثناء التسجيل، حاول مرة أخرى لاحقاً");
     }
 
     deleteSession(chatId);
