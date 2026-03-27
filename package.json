@@ -4,12 +4,16 @@
   "description": "SpinX Telegram Betting Game Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "author": "SpinX",
   "license": "ISC",
   "dependencies": {
     "node-telegram-bot-api": "^0.61.0",
     "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   }
 }
