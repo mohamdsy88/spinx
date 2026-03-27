@@ -36,12 +36,14 @@ async function createPlayer({ telegram_id, full_name, phone, agent_id }) {
     .insert([{ telegram_id, unique_id, full_name, phone, role: 'player', agent_id, balance: 0 }])
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error('createPlayer error:', error);
+    throw new Error(error.message);
+  }
   return data;
 }
 
 async function createAgent({ telegram_id }) {
-  // التحقق من عدم وجوده مسبقاً
   const existing = await getUserByTelegramId(telegram_id);
   if (existing) throw new Error('ALREADY_EXISTS');
 
@@ -51,7 +53,12 @@ async function createAgent({ telegram_id }) {
     .insert([{ telegram_id, unique_id, role: 'agent', balance: 0 }])
     .select()
     .single();
-  if (error) throw new Error(error.message);
+
+  if (error) {
+    console.error('createAgent Supabase error:', JSON.stringify(error));
+    throw new Error(error.message || error.code || 'SUPABASE_ERROR');
+  }
+
   return data;
 }
 
@@ -61,12 +68,14 @@ async function updateBalance(user_id, amount) {
   if (!user) return null;
 
   const newBalance = Math.max(0, Number(user.balance) + Number(amount));
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('users')
     .update({ balance: newBalance })
     .eq('id', user_id)
     .select()
     .single();
+
+  if (error) console.error('updateBalance error:', error);
   return data;
 }
 
@@ -91,20 +100,17 @@ async function unblockUser(user_id) {
 }
 
 async function getAllPlayers() {
-  const { data } = await supabase
-    .from('users').select('*').eq('role', 'player');
+  const { data } = await supabase.from('users').select('*').eq('role', 'player');
   return data || [];
 }
 
 async function getAllAgents() {
-  const { data } = await supabase
-    .from('users').select('*').eq('role', 'agent');
+  const { data } = await supabase.from('users').select('*').eq('role', 'agent');
   return data || [];
 }
 
 async function getAllUsers() {
-  const { data } = await supabase
-    .from('users').select('*').neq('role', 'admin');
+  const { data } = await supabase.from('users').select('*').neq('role', 'admin');
   return data || [];
 }
 
@@ -115,7 +121,6 @@ async function getPlayersByAgent(agent_id) {
 }
 
 async function setLuckControl(user_id, type, amount) {
-  // احذف أي سجل قديم لهذا المستخدم
   await supabase.from('luck_control').delete().eq('user_id', user_id);
   const { data } = await supabase
     .from('luck_control')
@@ -127,18 +132,12 @@ async function setLuckControl(user_id, type, amount) {
 
 async function getLuckControl(user_id) {
   const { data } = await supabase
-    .from('luck_control')
-    .select('*')
-    .eq('user_id', user_id)
-    .single();
+    .from('luck_control').select('*').eq('user_id', user_id).single();
   return data || null;
 }
 
 async function updateLuckUsed(luck_id, used_amount) {
-  await supabase
-    .from('luck_control')
-    .update({ used_amount })
-    .eq('id', luck_id);
+  await supabase.from('luck_control').update({ used_amount }).eq('id', luck_id);
 }
 
 async function deleteLuckControl(user_id) {
@@ -146,11 +145,12 @@ async function deleteLuckControl(user_id) {
 }
 
 async function saveRequest({ request_id, user_id, agent_id, type, amount }) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('requests')
     .insert([{ request_id, user_id, agent_id, type, amount, status: 'pending' }])
     .select()
     .single();
+  if (error) console.error('saveRequest error:', error);
   return data;
 }
 
@@ -176,19 +176,13 @@ async function getRequestByRequestId(request_id) {
 
 async function countAgentRequests(agent_db_id) {
   const { data } = await supabase
-    .from('requests')
-    .select('*')
-    .eq('user_id', agent_db_id)
-    .eq('type', 'deposit');
+    .from('requests').select('*').eq('user_id', agent_db_id).eq('type', 'deposit');
   return data || [];
 }
 
 async function countAgentTransfers(agent_db_id) {
   const { data } = await supabase
-    .from('requests')
-    .select('*')
-    .eq('agent_id', agent_db_id)
-    .eq('type', 'withdraw');
+    .from('requests').select('*').eq('agent_id', agent_db_id).eq('type', 'withdraw');
   return data || [];
 }
 
