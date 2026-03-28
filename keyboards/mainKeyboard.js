@@ -31,7 +31,7 @@ function playerKeyboard() {
     reply_markup: {
       keyboard: [
         ["💰 رصيدي", "🎮 ابدأ اللعب"],
-        ["📤 طلب سحب رصيد"],
+        ["📤 طلب سحب رصيد", "👤 بياناتي"],
         ["📞 تواصل مع الإدارة"]
       ],
       resize_keyboard: true
@@ -44,7 +44,8 @@ function agentKeyboard() {
     reply_markup: {
       keyboard: [
         ["📥 طلب رصيد من الإدارة", "💸 تحويل رصيد للاعب"],
-        ["💰 رصيدي", "📊 إحصائياتي"]
+        ["💰 رصيدي", "📊 إحصائياتي"],
+        ["👤 بياناتي"]
       ],
       resize_keyboard: true
     }
