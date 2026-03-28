@@ -1,162 +1,167 @@
 // handlers/registerHandler.js
-const { bot, ADMIN_ID }       = require('../config/config');
-const { getUserByTelegramId, getUserByUniqueId, createPlayer, getUserById } = require('../services/userService');
-const { startRegisterKeyboard, phoneKeyboard, playerKeyboard, adminKeyboard } = require('../keyboards/mainKeyboard');
-const { formatUSD, formatDate } = require('../utils/helpers');
+const { bot } = require('../config/config');
+const { getUserByTelegramId, createPlayer, getUserByUniqueId } = require('../services/userService');
+const { phoneKeyboard, removeKeyboard, playerKeyboard, agentKeyboard } = require('../keyboards/mainKeyboard');
 const { getSession, setSession, deleteSession, updateSession } = require('../state/sessions');
 
-// ▶️ /start
-bot.onText(/\/start/, async (msg) => {
-  const chatId = msg.chat.id;
-
-  // 👑 إذا كان الأدمن — أظهر لوحة الأدمن مباشرة
-  if (msg.from.id.toString() === ADMIN_ID.toString()) {
-    return bot.sendMessage(chatId,
-      "👑 *لوحة تحكم الأدمن — SpinX*\nأهلاً بك يا مدير اللعبة!",
-      { parse_mode: 'Markdown', ...adminKeyboard() });
-  }
-
-  const existing = await getUserByTelegramId(chatId);
-
-  if (existing) {
-    if (existing.is_blocked) {
-      return bot.sendMessage(chatId,
-        "🚫 حسابك في مرحلة التجميد\nالرجاء التواصل مع الإدارة");
-    }
-    return bot.sendMessage(chatId,
-      "✅ أنت مسجل بالفعل في SpinX\nاستخدم الأزرار أدناه للتنقل",
-      playerKeyboard());
-  }
-
-  bot.sendMessage(
-    chatId,
-    `🎰 *مرحباً بك في SpinX*\n\n` +
-    `🌟 *وصف اللعبة:*\n` +
-    `نظام مراهنات رقمي مثير يعمل عبر تيليغرام يتيح لك المشاركة في رهانات باستخدام الدولار الأمريكي 💵\n\n` +
-    `🏗️ *هيكل النظام:*\n` +
-    `👑 الإدارة — إشراف كامل على النظام\n` +
-    `🧑‍💼 الوكلاء — إدارة الإيداع والسحب\n` +
-    `🎮 اللاعبون — المشاركة في الرهانات\n\n` +
-    `📜 *القواعد العامة:*\n` +
-    `• تقديم معلومات صحيحة أثناء التسجيل\n` +
-    `• يُمنع إنشاء أكثر من حساب\n` +
-    `• جميع العمليات المالية عبر الوكيل فقط\n` +
-    `• أي محاولة احتيال تؤدي لإيقاف الحساب فورًا\n\n` +
-    `⚖️ *بالضغط على زر التسجيل أنت توافق على جميع الشروط*\n\n` +
-    `👇 اضغط للبدء`,
-    { parse_mode: 'Markdown', ...startRegisterKeyboard() }
-  );
-});
-
-// 🎯 callback: زر بدء التسجيل
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  callback_query — بدء التسجيل
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 bot.on('callback_query', async (query) => {
   if (query.data !== 'start_register') return;
-  const chatId = query.message.chat.id;
 
-  // تجاهل إذا كان الأدمن
-  if (chatId.toString() === ADMIN_ID.toString()) {
-    return bot.answerCallbackQuery(query.id);
-  }
+  const chatId     = query.message.chat.id;
+  const telegramId = query.from.id;
 
-  const existing = await getUserByTelegramId(chatId);
-  if (existing) {
-    return bot.answerCallbackQuery(query.id, { text: '✅ أنت مسجل بالفعل' });
-  }
-
-  setSession(chatId, { step: 'register_agent' });
   bot.answerCallbackQuery(query.id);
-  bot.sendMessage(chatId,
-    "📨 الرجاء أرسل *ايدي الوكيل* المسؤول عن حسابك:",
-    { parse_mode: 'Markdown' });
+
+  // التحقق أنه ليس وكيلاً أو لاعباً مسجلاً
+  const existing = await getUserByTelegramId(telegramId);
+  if (existing) {
+    if (existing.role === 'agent') {
+      return bot.sendMessage(chatId,
+        `🧑‍💼 *أنت وكيل معتمد بالفعل!*\n\n🔑 *ايديك:* \`${existing.unique_id}\``,
+        { parse_mode: 'Markdown', ...agentKeyboard() });
+    }
+    if (existing.role === 'player') {
+      return bot.sendMessage(chatId,
+        `✅ *أنت مسجل بالفعل!*\n\n🆔 *ايديك:* \`${existing.unique_id}\``,
+        { parse_mode: 'Markdown', ...playerKeyboard() });
+    }
+  }
+
+  setSession(chatId, { action: 'register_agent_id' });
+
+  return bot.sendMessage(chatId,
+    `📋 *خطوات التسجيل في SpinX*\n\n` +
+    `━━━━━━━━━━━━━━━━\n` +
+    `الخطوة 1️⃣ من 3️⃣\n\n` +
+    `🔑 *أرسل ايدي الوكيل الخاص بك:*\n` +
+    `_(احصل عليه من وكيلك)_`,
+    { parse_mode: 'Markdown', ...removeKeyboard() });
 });
 
-// 📩 رسائل التسجيل
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  رسائل التسجيل
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const session = getSession(chatId);
+  const chatId     = msg.chat.id;
+  const telegramId = msg.from.id;
+  const session    = getSession(chatId);
 
-  // تجاهل إن لم يكن في جلسة تسجيل
-  if (!session || !session.step || !session.step.startsWith('register_')) return;
+  // فقط جلسات التسجيل
+  if (!session || !session.action?.startsWith('register_')) return;
 
-  // 1️⃣ إدخال ID الوكيل
-  if (session.step === 'register_agent') {
-    if (!msg.text) return;
-    const agent = await getUserByUniqueId(msg.text.trim());
+  const text = msg.text?.trim();
 
+  // ──────────────────────────────────────────
+  // الخطوة 1: استقبال ايدي الوكيل
+  // ──────────────────────────────────────────
+  if (session.action === 'register_agent_id') {
+    if (!text) return;
+
+    const agent = await getUserByUniqueId(text);
     if (!agent || agent.role !== 'agent') {
       return bot.sendMessage(chatId,
-        "❌ *هذا الايدي غير موجود*\nالرجاء التحقق من الوكيل ليمنحك الايدي الصحيح الخاص بحسابه",
+        `❌ *ايدي الوكيل غير صحيح*\n\n` +
+        `تأكد من الايدي وأرسله مرة أخرى:\n` +
+        `_(مثال: AB1234)_`,
         { parse_mode: 'Markdown' });
     }
 
-    updateSession(chatId, { step: 'register_name', agent });
+    updateSession(chatId, {
+      action:   'register_name',
+      agent_id: agent.id
+    });
+
     return bot.sendMessage(chatId,
-      `✅ *الوكيل موجود:* ${agent.full_name || 'وكيل SpinX'}\n\n✍️ الرجاء أرسل *اسمك الكامل*:`,
+      `✅ *تم التحقق من الوكيل بنجاح!*\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `الخطوة 2️⃣ من 3️⃣\n\n` +
+      `👤 *أرسل اسمك الكامل:*`,
       { parse_mode: 'Markdown' });
   }
 
-  // 2️⃣ إدخال الاسم
-  if (session.step === 'register_name') {
-    if (!msg.text) return;
-    updateSession(chatId, { step: 'register_phone', full_name: msg.text.trim() });
+  // ──────────────────────────────────────────
+  // الخطوة 2: استقبال الاسم الكامل
+  // ──────────────────────────────────────────
+  if (session.action === 'register_name') {
+    if (!text || text.length < 3) {
+      return bot.sendMessage(chatId,
+        "❌ الاسم قصير جداً، أرسل اسمك الكامل (3 أحرف على الأقل)");
+    }
+
+    updateSession(chatId, {
+      action:    'register_phone',
+      full_name: text
+    });
+
     return bot.sendMessage(chatId,
-      "📱 الرجاء *شارك رقم هاتفك* من زر المشاركة أدناه:",
+      `✅ *تم حفظ الاسم!*\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `الخطوة 3️⃣ من 3️⃣\n\n` +
+      `📱 *اضغط الزر لمشاركة رقم هاتفك:*`,
       { parse_mode: 'Markdown', ...phoneKeyboard() });
   }
 
-  // 3️⃣ استقبال رقم الهاتف
-  if (session.step === 'register_phone' && msg.contact) {
-    const phone = msg.contact.phone_number;
-    const { agent, full_name } = session;
+  // ──────────────────────────────────────────
+  // الخطوة 3: استقبال رقم الهاتف
+  // ──────────────────────────────────────────
+  if (session.action === 'register_phone') {
+    // استقبال جهة الاتصال عبر الزر
+    let phone = null;
 
-    let newUser;
+    if (msg.contact) {
+      phone = msg.contact.phone_number;
+    } else if (text && /^\+?[0-9]{8,15}$/.test(text.replace(/\s/g, ''))) {
+      phone = text;
+    } else {
+      return bot.sendMessage(chatId,
+        "📱 *اضغط على زر مشاركة رقم الهاتف* أو أرسل رقمك يدوياً:\n_(مثال: +9661234567890)_",
+        { parse_mode: 'Markdown', ...phoneKeyboard() });
+    }
+
+    // التحقق من عدم التسجيل المسبق
+    const existing = await getUserByTelegramId(telegramId);
+    if (existing) {
+      deleteSession(chatId);
+      if (existing.role === 'agent') {
+        return bot.sendMessage(chatId,
+          `🧑‍💼 *أنت وكيل بالفعل!*\n🔑 *ايديك:* \`${existing.unique_id}\``,
+          { parse_mode: 'Markdown', ...agentKeyboard() });
+      }
+      return bot.sendMessage(chatId,
+        `✅ *أنت مسجل بالفعل!*\n🆔 *ايديك:* \`${existing.unique_id}\``,
+        { parse_mode: 'Markdown', ...playerKeyboard() });
+    }
+
+    let newPlayer;
     try {
-      newUser = await createPlayer({
-        telegram_id: chatId,
-        full_name,
+      newPlayer = await createPlayer({
+        telegram_id: telegramId,
+        full_name:   session.full_name,
         phone,
-        agent_id: agent.id
+        agent_id:    session.agent_id
       });
     } catch (e) {
       deleteSession(chatId);
+      console.error('createPlayer error:', e.message);
       return bot.sendMessage(chatId,
-        "❌ حدث خطأ أثناء التسجيل، حاول مرة أخرى لاحقاً");
+        `❌ حدث خطأ أثناء التسجيل\n\`${e.message}\``,
+        { parse_mode: 'Markdown' });
     }
 
     deleteSession(chatId);
 
-    // 🎉 إشعار اللاعب
-    bot.sendMessage(chatId,
-      `🎉 *تم تسجيلك بنجاح في SpinX!*\n\n` +
+    return bot.sendMessage(chatId,
+      `🎉 *تم التسجيل بنجاح في SpinX!*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
-      `👤 *الاسم:* ${newUser.full_name}\n` +
-      `🆔 *ايديك:* \`${newUser.unique_id}\`\n` +
-      `🧑‍💼 *الوكيل:* ${agent.full_name || 'وكيل SpinX'} | \`${agent.unique_id}\`\n` +
-      `💰 *رصيدك الحالي:* ${formatUSD(0)}\n` +
+      `👤 *الاسم:* ${newPlayer.full_name}\n` +
+      `🆔 *ايديك في اللعبة:* \`${newPlayer.unique_id}\`\n` +
+      `📱 *رقم الهاتف:* ${phone}\n` +
+      `💰 *رصيدك الابتدائي:* 0.00 دولار أمريكي 💵\n` +
       `━━━━━━━━━━━━━━━━\n` +
-      `🔥 استعد للعب واربح!`,
+      `🎮 تواصل مع وكيلك لإضافة رصيد والبدء باللعب!`,
       { parse_mode: 'Markdown', ...playerKeyboard() });
-
-    // 👑 إشعار الأدمن
-    bot.sendMessage(ADMIN_ID,
-      `🚨 *لاعب جديد انضم إلى SpinX!*\n\n` +
-      `━━━━━━━━━━━━━━━━\n` +
-      `👤 *الاسم:* ${newUser.full_name}\n` +
-      `📞 *رقم الهاتف:* ${phone}\n` +
-      `🆔 *ايدي اللاعب:* \`${newUser.unique_id}\`\n` +
-      `🧑‍💼 *الوكيل:* ${agent.full_name || 'وكيل SpinX'} | \`${agent.unique_id}\`\n` +
-      `📅 *تاريخ التسجيل:* ${formatDate()}\n` +
-      `━━━━━━━━━━━━━━━━`,
-      { parse_mode: 'Markdown' });
-
-    // 🧑‍💼 إشعار الوكيل
-    bot.sendMessage(agent.telegram_id,
-      `🎊 *لاعب جديد انضم إلى فريقك!*\n\n` +
-      `━━━━━━━━━━━━━━━━\n` +
-      `👤 *الاسم:* ${newUser.full_name}\n` +
-      `🆔 *ايدي اللاعب:* \`${newUser.unique_id}\`\n` +
-      `📅 *تاريخ الانضمام:* ${formatDate()}\n` +
-      `━━━━━━━━━━━━━━━━`,
-      { parse_mode: 'Markdown' });
   }
 });
