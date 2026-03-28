@@ -1,8 +1,9 @@
 // handlers/registerHandler.js
-const { bot } = require('../config/config');
-const { getUserByTelegramId, createPlayer, getUserByUniqueId } = require('../services/userService');
+const { bot, ADMIN_ID } = require('../config/config');
+const { getUserByTelegramId, createPlayer, getUserByUniqueId, getUserById } = require('../services/userService');
 const { phoneKeyboard, removeKeyboard, playerKeyboard, agentKeyboard } = require('../keyboards/mainKeyboard');
 const { getSession, setSession, deleteSession, updateSession } = require('../state/sessions');
+const { formatDate } = require('../utils/helpers');
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  callback_query — بدء التسجيل
@@ -15,7 +16,6 @@ bot.on('callback_query', async (query) => {
 
   bot.answerCallbackQuery(query.id);
 
-  // التحقق أنه ليس وكيلاً أو لاعباً مسجلاً
   const existing = await getUserByTelegramId(telegramId);
   if (existing) {
     if (existing.role === 'agent') {
@@ -49,7 +49,6 @@ bot.on('message', async (msg) => {
   const telegramId = msg.from.id;
   const session    = getSession(chatId);
 
-  // فقط جلسات التسجيل
   if (!session || !session.action?.startsWith('register_')) return;
 
   const text = msg.text?.trim();
@@ -64,14 +63,14 @@ bot.on('message', async (msg) => {
     if (!agent || agent.role !== 'agent') {
       return bot.sendMessage(chatId,
         `❌ *ايدي الوكيل غير صحيح*\n\n` +
-        `تأكد من الايدي وأرسله مرة أخرى:\n` +
-        `_(مثال: AB1234)_`,
+        `تأكد من الايدي وأرسله مرة أخرى:\n_(مثال: AB1234)_`,
         { parse_mode: 'Markdown' });
     }
 
     updateSession(chatId, {
-      action:   'register_name',
-      agent_id: agent.id
+      action:    'register_name',
+      agent_id:  agent.id,
+      agent_obj: agent
     });
 
     return bot.sendMessage(chatId,
@@ -108,7 +107,6 @@ bot.on('message', async (msg) => {
   // الخطوة 3: استقبال رقم الهاتف
   // ──────────────────────────────────────────
   if (session.action === 'register_phone') {
-    // استقبال جهة الاتصال عبر الزر
     let phone = null;
 
     if (msg.contact) {
@@ -121,7 +119,6 @@ bot.on('message', async (msg) => {
         { parse_mode: 'Markdown', ...phoneKeyboard() });
     }
 
-    // التحقق من عدم التسجيل المسبق
     const existing = await getUserByTelegramId(telegramId);
     if (existing) {
       deleteSession(chatId);
@@ -151,17 +148,52 @@ bot.on('message', async (msg) => {
         { parse_mode: 'Markdown' });
     }
 
+    // جلب بيانات الوكيل
+    const agent = session.agent_obj || await getUserById(session.agent_id);
+
     deleteSession(chatId);
 
-    return bot.sendMessage(chatId,
+    // ✅ رسالة اللاعب
+    bot.sendMessage(chatId,
       `🎉 *تم التسجيل بنجاح في SpinX!*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
       `👤 *الاسم:* ${newPlayer.full_name}\n` +
       `🆔 *ايديك في اللعبة:* \`${newPlayer.unique_id}\`\n` +
       `📱 *رقم الهاتف:* ${phone}\n` +
+      `🧑‍💼 *الوكيل:* ${agent ? agent.full_name || 'وكيل SpinX' : 'غير محدد'}\n` +
       `💰 *رصيدك الابتدائي:* 0.00 دولار أمريكي 💵\n` +
       `━━━━━━━━━━━━━━━━\n` +
       `🎮 تواصل مع وكيلك لإضافة رصيد والبدء باللعب!`,
       { parse_mode: 'Markdown', ...playerKeyboard() });
+
+    // 📣 إشعار الوكيل
+    if (agent && agent.telegram_id) {
+      bot.sendMessage(agent.telegram_id,
+        `🎉 *لاعب جديد انضم تحت إشرافك!*\n\n` +
+        `━━━━━━━━━━━━━━━━\n` +
+        `👤 *الاسم:* ${newPlayer.full_name}\n` +
+        `🆔 *ايدي اللاعب:* \`${newPlayer.unique_id}\`\n` +
+        `📱 *رقم الهاتف:* ${phone}\n` +
+        `📅 *تاريخ التسجيل:* ${formatDate()}\n` +
+        `━━━━━━━━━━━━━━━━\n` +
+        `💡 يمكنك تحويل رصيد له من لوحة التحكم`,
+        { parse_mode: 'Markdown' })
+        .catch(err => console.error('Agent notification error:', err.message));
+    }
+
+    // 📣 إشعار الأدمن
+    bot.sendMessage(ADMIN_ID,
+      `🆕 *لاعب جديد تم تسجيله*\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `👤 *الاسم:* ${newPlayer.full_name}\n` +
+      `🆔 *الايدي:* \`${newPlayer.unique_id}\`\n` +
+      `📱 *الهاتف:* ${phone}\n` +
+      `🧑‍💼 *الوكيل:* ${agent ? `${agent.full_name || 'وكيل'} | \`${agent.unique_id}\`` : 'غير محدد'}\n` +
+      `📅 *التاريخ:* ${formatDate()}\n` +
+      `━━━━━━━━━━━━━━━━`,
+      { parse_mode: 'Markdown' })
+      .catch(err => console.error('Admin notification error:', err.message));
+
+    return;
   }
 });
