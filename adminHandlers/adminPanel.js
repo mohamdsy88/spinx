@@ -34,7 +34,6 @@ bot.on('callback_query', async (query) => {
 
   const data = query.data;
 
-  // اختيار نوع الهدف لإضافة رصيد
   if (data === 'bal_player' || data === 'bal_agent') {
     updateSession(chatId, {
       action: 'add_balance',
@@ -42,11 +41,10 @@ bot.on('callback_query', async (query) => {
     });
     bot.answerCallbackQuery(query.id);
     return bot.sendMessage(chatId,
-      `📨 أرسل *ايدي ${data === 'bal_player' ? 'اللاعب' : 'الوكيل'}*:`,
+      `📨 أرسل *ايدي ${data === 'bal_player' ? 'اللاعب' : 'الوكيل'}*:\n_(أرسل "الغاء" للإلغاء)_`,
       { parse_mode: 'Markdown' });
   }
 
-  // اختيار نوع الهدف لخصم رصيد
   if (data === 'deduct_player' || data === 'deduct_agent') {
     updateSession(chatId, {
       action: 'deduct_balance',
@@ -54,11 +52,10 @@ bot.on('callback_query', async (query) => {
     });
     bot.answerCallbackQuery(query.id);
     return bot.sendMessage(chatId,
-      `📨 أرسل *ايدي ${data === 'deduct_player' ? 'اللاعب' : 'الوكيل'}*:`,
+      `📨 أرسل *ايدي ${data === 'deduct_player' ? 'اللاعب' : 'الوكيل'}*:\n_(أرسل "الغاء" للإلغاء)_`,
       { parse_mode: 'Markdown' });
   }
 
-  // قبول/رفض طلب رصيد الوكيل
   if (data.startsWith('agentreq_approve_') || data.startsWith('agentreq_reject_')) {
     const isApprove = data.startsWith('agentreq_approve_');
     const requestId = data.replace('agentreq_approve_', '').replace('agentreq_reject_', '');
@@ -134,6 +131,16 @@ bot.on('message', async (msg) => {
   const session = getSession(chatId);
 
   // ──────────────────────────────────────────
+  // ❌ إلغاء الأمر
+  // ──────────────────────────────────────────
+  if (text === 'الغاء' || text === 'إلغاء') {
+    deleteSession(chatId);
+    return bot.sendMessage(chatId,
+      "❎ *تم إلغاء العملية الحالية*",
+      { parse_mode: 'Markdown', ...adminKeyboard() });
+  }
+
+  // ──────────────────────────────────────────
   // ➕ إضافة رصيد
   // ──────────────────────────────────────────
   if (text === "➕ إضافة رصيد") {
@@ -164,7 +171,7 @@ bot.on('message', async (msg) => {
     const target = await getUserByUniqueId(text);
     if (!target || target.role !== session.target_role) {
       return bot.sendMessage(chatId,
-        `❌ الحساب غير موجود أو النوع غير صحيح\nتأكد من إدخال ايدي ${session.target_role === 'player' ? 'لاعب' : 'وكيل'}`);
+        `❌ الحساب غير موجود أو النوع غير صحيح\n_(أرسل "الغاء" للإلغاء)_`);
     }
 
     const agentInfo = (session.target_role === 'player' && target.agent_id)
@@ -177,19 +184,20 @@ bot.on('message', async (msg) => {
     info += `🆔 *الايدي:* \`${target.unique_id}\`\n`;
     info += `💰 *الرصيد الحالي:* ${formatUSD(target.balance)}\n`;
     if (agentInfo) info += `🧑‍💼 *الوكيل:* ${agentInfo.full_name || 'وكيل'} | \`${agentInfo.unique_id}\`\n`;
-    info += `━━━━━━━━━━━━━━━━\n💸 *أرسل المبلغ:*`;
+    info += `━━━━━━━━━━━━━━━━\n💸 *أرسل المبلغ:*\n_(أرسل "الغاء" للإلغاء)_`;
 
     return bot.sendMessage(chatId, info, { parse_mode: 'Markdown' });
   }
 
-  // إدخال المبلغ لإضافة/خصم
+  // إدخال المبلغ
   if (
     (session?.action === 'add_balance' || session?.action === 'deduct_balance') &&
     session?.target_user
   ) {
     const amount = Number(text);
     if (isNaN(amount) || amount <= 0) {
-      return bot.sendMessage(chatId, "❌ مبلغ غير صحيح، أرسل رقماً موجباً");
+      return bot.sendMessage(chatId,
+        "❌ مبلغ غير صحيح، أرسل رقماً موجباً\n_(أرسل \"الغاء\" للإلغاء)_");
     }
 
     const isAdd   = session.action === 'add_balance';
@@ -232,51 +240,76 @@ bot.on('message', async (msg) => {
   if (text === "👤 إضافة وكيل") {
     setSession(chatId, { action: 'add_agent' });
     return bot.sendMessage(chatId,
-      "📨 أرسل *Telegram ID* الخاص بالوكيل:\n_(الرقم الرقمي فقط، مثال: 123456789)_",
+      "📨 أرسل *Telegram ID* الخاص بالوكيل:\n_(الرقم الرقمي فقط، مثال: 123456789)_\n_(أرسل \"الغاء\" للإلغاء)_",
       { parse_mode: 'Markdown' });
   }
 
-  if (session?.action === 'add_agent') {
+  // الخطوة 1: استقبال Telegram ID
+  if (session?.action === 'add_agent' && !session?.agent_telegram_id) {
     const telegram_id = Number(text);
     if (isNaN(telegram_id) || telegram_id <= 0) {
-      return bot.sendMessage(chatId, "❌ أرسل رقم Telegram ID صحيح (أرقام فقط)");
+      return bot.sendMessage(chatId,
+        "❌ أرسل رقم Telegram ID صحيح (أرقام فقط)\n_(أرسل \"الغاء\" للإلغاء)_");
     }
+
+    updateSession(chatId, { agent_telegram_id: telegram_id });
+    return bot.sendMessage(chatId,
+      "✅ *تم استلام الـ ID*\n\n✍️ الآن أرسل *الاسم الكامل للوكيل:*\n_(أرسل \"الغاء\" للإلغاء)_",
+      { parse_mode: 'Markdown' });
+  }
+
+  // الخطوة 2: استقبال الاسم الكامل وإضافة الوكيل
+  if (session?.action === 'add_agent' && session?.agent_telegram_id) {
+    const full_name   = text;
+    const telegram_id = session.agent_telegram_id;
 
     let agent;
     try {
-      agent = await createAgent({ telegram_id });
-    } catch (e) {
-      deleteSession(chatId);
-      console.error('Add agent error:', e.message);
+      const { supabase }          = require('../config/config');
+      const { generateUserId }    = require('../utils/helpers');
+      const { getUserByTelegramId } = require('../services/userService');
 
-      if (e.message === 'ALREADY_EXISTS') {
+      const existing = await getUserByTelegramId(telegram_id);
+      if (existing) {
+        deleteSession(chatId);
         return bot.sendMessage(chatId, "⚠️ هذا الشخص موجود بالفعل في النظام");
       }
 
-      // إظهار الخطأ الحقيقي لمساعدتك في التشخيص
-      return bot.sendMessage(chatId,
-        `❌ *فشل إضافة الوكيل*\n\n` +
-        `📋 *تفاصيل الخطأ:*\n\`${e.message}\`\n\n` +
-        `🔧 *الحل المحتمل:*\n` +
-        `تأكد أنك تستخدم مفتاح \`service_role\` من Supabase وليس \`anon\``,
-        { parse_mode: 'Markdown' });
+      const unique_id = generateUserId();
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{ telegram_id, unique_id, full_name, role: 'agent', balance: 0 }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('createAgent error:', JSON.stringify(error));
+        deleteSession(chatId);
+        return bot.sendMessage(chatId,
+          `❌ *فشل إضافة الوكيل*\n\`${error.message}\``,
+          { parse_mode: 'Markdown' });
+      }
+
+      agent = data;
+    } catch (e) {
+      deleteSession(chatId);
+      return bot.sendMessage(chatId, `❌ خطأ غير متوقع: ${e.message}`);
     }
 
     deleteSession(chatId);
 
-    // إشعار الأدمن
     bot.sendMessage(chatId,
       `✅ *تم إضافة وكيل جديد بنجاح*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
+      `📛 *الاسم:* ${agent.full_name}\n` +
       `📱 *Telegram ID:* \`${telegram_id}\`\n` +
       `🔑 *ايدي الوكيل في اللعبة:* \`${agent.unique_id}\`\n` +
       `📅 *التاريخ:* ${formatDate()}\n` +
       `━━━━━━━━━━━━━━━━`,
       { parse_mode: 'Markdown' });
 
-    // إشعار الوكيل
     bot.sendMessage(telegram_id,
-      `🎉 *مبروك! تم تعيينك كوكيل في SpinX*\n\n` +
+      `🎉 *مبروك ${agent.full_name}! تم تعيينك كوكيل في SpinX*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
       `🔑 *ايديك الخاص في اللعبة:* \`${agent.unique_id}\`\n` +
       `📌 *شارك هذا الايدي مع لاعبيك عند التسجيل*\n` +
@@ -293,7 +326,7 @@ bot.on('message', async (msg) => {
   if (text === "❄️ تجميد حساب") {
     setSession(chatId, { action: 'block_account' });
     return bot.sendMessage(chatId,
-      "📨 أرسل *ايدي الحساب* المراد تجميده:",
+      "📨 أرسل *ايدي الحساب* المراد تجميده:\n_(أرسل \"الغاء\" للإلغاء)_",
       { parse_mode: 'Markdown' });
   }
 
@@ -319,7 +352,7 @@ bot.on('message', async (msg) => {
       `💰 *الرصيد:* ${formatUSD(user.balance)}\n` +
       `📋 *النوع:* ${user.role === 'player' ? 'لاعب' : 'وكيل'}${agentInfo}\n` +
       `━━━━━━━━━━━━━━━━\n` +
-      `⚡ أرسل *نعم* لتأكيد تجميد الحساب:`,
+      `⚡ أرسل *نعم* لتأكيد التجميد أو *الغاء* للإلغاء:`,
       { parse_mode: 'Markdown' });
   }
 
@@ -356,7 +389,7 @@ bot.on('message', async (msg) => {
   if (text === "🔓 فك التجميد") {
     setSession(chatId, { action: 'unblock_account' });
     return bot.sendMessage(chatId,
-      "📨 أرسل *ايدي الحساب* المراد فك تجميده:",
+      "📨 أرسل *ايدي الحساب* المراد فك تجميده:\n_(أرسل \"الغاء\" للإلغاء)_",
       { parse_mode: 'Markdown' });
   }
 
@@ -374,7 +407,7 @@ bot.on('message', async (msg) => {
       `🆔 *الايدي:* \`${user.unique_id}\`\n` +
       `💰 *الرصيد:* ${formatUSD(user.balance)}\n` +
       `━━━━━━━━━━━━━━━━\n` +
-      `✅ أرسل *نعم* لتأكيد فك التجميد:`,
+      `✅ أرسل *نعم* لتأكيد فك التجميد أو *الغاء* للإلغاء:`,
       { parse_mode: 'Markdown' });
   }
 
@@ -410,21 +443,19 @@ bot.on('message', async (msg) => {
   if (text === "📢 إشعار للجميع") {
     setSession(chatId, { action: 'broadcast' });
     return bot.sendMessage(chatId,
-      "📢 *أرسل الرسالة التي تريد إذاعتها للجميع:*",
+      "📢 *أرسل الرسالة التي تريد إذاعتها للجميع:*\n_(أرسل \"الغاء\" للإلغاء)_",
       { parse_mode: 'Markdown' });
   }
 
   if (session?.action === 'broadcast') {
-    const message = text;
     deleteSession(chatId);
-
     const allUsers = await getAllUsers();
     let sent = 0, failed = 0;
 
     const broadcastMsg =
       `📢 *إشعار من إدارة SpinX*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
-      `${message}\n` +
+      `${text}\n` +
       `━━━━━━━━━━━━━━━━\n` +
       `📅 ${formatDate()}`;
 
@@ -436,7 +467,6 @@ bot.on('message', async (msg) => {
     }
 
     await bot.sendMessage(chatId, broadcastMsg, { parse_mode: 'Markdown' });
-
     return bot.sendMessage(chatId,
       `✅ *تم إرسال الإشعار*\n📤 *مرسل:* ${sent} | ❌ *فشل:* ${failed}`,
       { parse_mode: 'Markdown' });
@@ -448,7 +478,7 @@ bot.on('message', async (msg) => {
   if (text === "✉️ رسالة خاصة") {
     setSession(chatId, { action: 'private_msg' });
     return bot.sendMessage(chatId,
-      "📨 أرسل *ايدي الحساب* الذي تريد مراسلته:",
+      "📨 أرسل *ايدي الحساب* الذي تريد مراسلته:\n_(أرسل \"الغاء\" للإلغاء)_",
       { parse_mode: 'Markdown' });
   }
 
@@ -457,9 +487,9 @@ bot.on('message', async (msg) => {
     if (!user) return bot.sendMessage(chatId, "❌ الحساب غير موجود");
 
     updateSession(chatId, { msg_target: user });
-
     return bot.sendMessage(chatId,
-      `✅ *الحساب:* ${user.full_name || 'بدون اسم'} | \`${user.unique_id}\`\n\n✍️ أرسل الرسالة الخاصة:`,
+      `✅ *الحساب:* ${user.full_name || 'بدون اسم'} | \`${user.unique_id}\`\n\n` +
+      `✍️ أرسل الرسالة الخاصة:\n_(أرسل "الغاء" للإلغاء)_`,
       { parse_mode: 'Markdown' });
   }
 
@@ -487,30 +517,26 @@ bot.on('message', async (msg) => {
   if (text === "🎯 ضربة حظ") {
     setSession(chatId, { action: 'luck_win' });
     return bot.sendMessage(chatId,
-      "🎯 أرسل *ايدي اللاعب* لتفعيل ضربة الحظ:",
+      "🎯 أرسل *ايدي اللاعب* لتفعيل ضربة الحظ:\n_(أرسل \"الغاء\" للإلغاء)_",
       { parse_mode: 'Markdown' });
   }
 
   if (session?.action === 'luck_win' && !session?.luck_target) {
     const user = await getUserByUniqueId(text);
-    if (!user || user.role !== 'player') {
-      return bot.sendMessage(chatId, "❌ اللاعب غير موجود");
-    }
+    if (!user || user.role !== 'player') return bot.sendMessage(chatId, "❌ اللاعب غير موجود");
     updateSession(chatId, { luck_target: user });
     return bot.sendMessage(chatId,
       `✅ *اللاعب:* ${user.full_name} | \`${user.unique_id}\`\n` +
       `💰 *رصيده:* ${formatUSD(user.balance)}\n\n` +
-      `💰 أرسل *المبلغ المستهدف* لضربة الحظ:`,
+      `💰 أرسل *المبلغ المستهدف* لضربة الحظ:\n_(أرسل "الغاء" للإلغاء)_`,
       { parse_mode: 'Markdown' });
   }
 
   if (session?.action === 'luck_win' && session?.luck_target) {
     const amount = Number(text);
     if (isNaN(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ مبلغ غير صحيح");
-
     await setLuckControl(session.luck_target.id, 'win', amount);
     deleteSession(chatId);
-
     return bot.sendMessage(chatId,
       `🎯 *تم تفعيل ضربة الحظ*\n\n` +
       `👤 *اللاعب:* ${session.luck_target.full_name}\n` +
@@ -525,30 +551,26 @@ bot.on('message', async (msg) => {
   if (text === "💀 حظ أوفر") {
     setSession(chatId, { action: 'luck_lose' });
     return bot.sendMessage(chatId,
-      "💀 أرسل *ايدي اللاعب* لتفعيل حظ أوفر:",
+      "💀 أرسل *ايدي اللاعب* لتفعيل حظ أوفر:\n_(أرسل \"الغاء\" للإلغاء)_",
       { parse_mode: 'Markdown' });
   }
 
   if (session?.action === 'luck_lose' && !session?.luck_target) {
     const user = await getUserByUniqueId(text);
-    if (!user || user.role !== 'player') {
-      return bot.sendMessage(chatId, "❌ اللاعب غير موجود");
-    }
+    if (!user || user.role !== 'player') return bot.sendMessage(chatId, "❌ اللاعب غير موجود");
     updateSession(chatId, { luck_target: user });
     return bot.sendMessage(chatId,
       `✅ *اللاعب:* ${user.full_name} | \`${user.unique_id}\`\n` +
       `💰 *رصيده:* ${formatUSD(user.balance)}\n\n` +
-      `💸 أرسل *المبلغ المستهدف* للخسارة:`,
+      `💸 أرسل *المبلغ المستهدف للخسارة:*\n_(أرسل "الغاء" للإلغاء)_`,
       { parse_mode: 'Markdown' });
   }
 
   if (session?.action === 'luck_lose' && session?.luck_target) {
     const amount = Number(text);
     if (isNaN(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ مبلغ غير صحيح");
-
     await setLuckControl(session.luck_target.id, 'lose', amount);
     deleteSession(chatId);
-
     return bot.sendMessage(chatId,
       `💀 *تم تفعيل حظ أوفر*\n\n` +
       `👤 *اللاعب:* ${session.luck_target.full_name}\n` +
