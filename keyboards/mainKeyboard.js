@@ -30,9 +30,9 @@ function playerKeyboard() {
   return {
     reply_markup: {
       keyboard: [
-        ["💰 رصيدي", "🎮 ابدأ اللعب"],
-        ["📤 طلب سحب رصيد", "👤 بياناتي"],
-        ["📞 تواصل مع الإدارة"]
+        [{ text: "🎰 العب الآن", web_app: { url: "https://memory-recall--mohamdbarood88.replit.app" } }],
+        ["💰 رصيدي", "📤 طلب سحب رصيد"],
+        ["👤 بياناتي", "📞 تواصل مع الإدارة"]
       ],
       resize_keyboard: true
     }
@@ -102,6 +102,19 @@ function betKeyboard() {
           { text: "8$",  callback_data: "bet_8" },
           { text: "9$",  callback_data: "bet_9" },
           { text: "10$", callback_data: "bet_10" }
+        ],
+        [
+          { text: "20$",  callback_data: "bet_20" },
+          { text: "30$",  callback_data: "bet_30" },
+          { text: "40$",  callback_data: "bet_40" },
+          { text: "50$",  callback_data: "bet_50" }
+        ],
+        [
+          { text: "60$",  callback_data: "bet_60" },
+          { text: "70$",  callback_data: "bet_70" },
+          { text: "80$",  callback_data: "bet_80" },
+          { text: "90$",  callback_data: "bet_90" },
+          { text: "100$", callback_data: "bet_100" }
         ],
         [{ text: "🚪 الخروج من اللعبة", callback_data: "exit_game" }]
       ]
