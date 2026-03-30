@@ -5,7 +5,7 @@ const {
   updateBalance, saveRequest
 } = require('../services/userService');
 const { formatUSD, formatDate, generateRequestId } = require('../utils/helpers');
-const { playerKeyboard, betKeyboard, approveRejectKeyboard } = require('../keyboards/mainKeyboard');
+const { playerKeyboard, betKeyboard, approveRejectKeyboard, playNowInlineKeyboard } = require('../keyboards/mainKeyboard');
 const { spin } = require('../gameEngine/spinGame');
 const { getSession, setSession, deleteSession } = require('../state/sessions');
 
@@ -21,6 +21,12 @@ bot.on('message', async (msg) => {
   const chatId  = msg.chat.id;
   const text    = msg.text.trim();
   const session = getSession(chatId);
+
+  // إلغاء عند استقبال أمر /
+  if (text.startsWith('/')) {
+    deleteSession(chatId);
+    return;
+  }
 
   // تجاهل إن كانت الجلسة تابعة لـ handler آخر
   if (session && !session.action?.startsWith('player_')) return;
@@ -40,6 +46,19 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(chatId,
       "🚫 *حسابك في مرحلة التجميد*\nالرجاء التواصل مع الإدارة:\n@SpinXAdmin",
       { parse_mode: 'Markdown' });
+  }
+
+  // ──────────────────────────────────────────
+  // 🎰 العب الآن ← يرسل زر inline يفتح الميني آب
+  // ──────────────────────────────────────────
+  if (text === "🎰 العب الآن") {
+    return bot.sendMessage(chatId,
+      `🎰 *SpinX — الألعاب*\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `💰 *رصيدك:* ${formatUSD(user.balance)}\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `اضغط الزر أدناه لفتح اللعبة:`,
+      { parse_mode: 'Markdown', ...playNowInlineKeyboard() });
   }
 
   // ──────────────────────────────────────────
@@ -75,7 +94,7 @@ bot.on('message', async (msg) => {
   }
 
   // ──────────────────────────────────────────
-  // 🎮 ابدأ اللعب
+  // 🎮 ابدأ اللعب (القديم — للتوافق)
   // ──────────────────────────────────────────
   if (text === "🎮 ابدأ اللعب") {
     if (user.balance <= 0) {
