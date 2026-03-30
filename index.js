@@ -2,6 +2,7 @@
 const { bot, ADMIN_ID } = require('./config/config');
 const { getUserByTelegramId } = require('./services/userService');
 const { adminKeyboard, agentKeyboard, playerKeyboard, startRegisterKeyboard } = require('./keyboards/mainKeyboard');
+const https = require('https');
 
 // تحميل جميع المعالجات
 require('./adminHandlers/adminPanel');
@@ -67,3 +68,33 @@ bot.onText(/\/start/, async (msg) => {
 });
 
 console.log('🚀 SpinX Bot is running...');
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  إزالة المستطيل الأزرق (Menu Button)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const menuBtnPayload = JSON.stringify({ menu_button: { type: 'commands' } });
+
+const menuReq = https.request(
+  {
+    hostname: 'api.telegram.org',
+    path: `/bot${BOT_TOKEN}/setMyMenuButton`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(menuBtnPayload)
+    }
+  },
+  (res) => {
+    let body = '';
+    res.on('data', chunk => body += chunk);
+    res.on('end', () => {
+      const result = JSON.parse(body);
+      if (result.ok) console.log('✅ تم إزالة زر القائمة الأزرق بنجاح');
+      else console.log('⚠️ فشل إزالة الزر الأزرق:', result.description);
+    });
+  }
+);
+menuReq.on('error', (e) => console.log('⚠️ خطأ في إزالة الزر الأزرق:', e.message));
+menuReq.write(menuBtnPayload);
+menuReq.end();
