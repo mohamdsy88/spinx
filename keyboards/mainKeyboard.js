@@ -1,5 +1,7 @@
 // keyboards/mainKeyboard.js
 
+const GAME_URL = "https://memory-recall--mohamdbarood88.replit.app";
+
 function startRegisterKeyboard() {
   return {
     reply_markup: {
@@ -26,11 +28,22 @@ function removeKeyboard() {
   return { reply_markup: { remove_keyboard: true } };
 }
 
+// ── زر فتح اللعبة (inline — يعمل على جميع إصدارات تيليغرام) ──
+function playNowInlineKeyboard() {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "🎰 افتح اللعبة الآن", web_app: { url: GAME_URL } }]
+      ]
+    }
+  };
+}
+
 function playerKeyboard() {
   return {
     reply_markup: {
       keyboard: [
-        [{ text: "🎰 العب الآن", web_app: { url: "https://memory-recall--mohamdbarood88.replit.app" } }],
+        ["🎰 العب الآن"],
         ["💰 رصيدي", "📤 طلب سحب رصيد"],
         ["👤 بياناتي", "📞 تواصل مع الإدارة"]
       ],
@@ -43,7 +56,7 @@ function agentKeyboard() {
   return {
     reply_markup: {
       keyboard: [
-        [{ text: "🎰 العب الآن", web_app: { url: "https://memory-recall--mohamdbarood88.replit.app" } }],
+        ["🎰 العب الآن"],
         ["📥 طلب رصيد من الإدارة", "💸 تحويل رصيد للاعب"],
         ["💰 رصيدي", "📊 إحصائياتي"],
         ["👤 بياناتي"]
@@ -138,6 +151,6 @@ function approveRejectKeyboard(prefix, requestId) {
 
 module.exports = {
   startRegisterKeyboard, phoneKeyboard, removeKeyboard,
-  playerKeyboard, agentKeyboard, adminKeyboard,
+  playerKeyboard, agentKeyboard, adminKeyboard, playNowInlineKeyboard,
   targetTypeKeyboard, betKeyboard, approveRejectKeyboard
 };
