@@ -41,7 +41,6 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
 
   if (isApprove) {
-    // التحقق من رصيد اللاعب
     if (player.balance < req.amount) {
       return bot.answerCallbackQuery(query.id, { text: '❌ رصيد اللاعب غير كافٍ لتنفيذ السحب' });
     }
@@ -50,13 +49,10 @@ bot.on('callback_query', async (query) => {
     const updatedAgent  = await updateBalance(agent.id,   req.amount);
     await updateRequestStatus(requestId, 'approved');
 
-    // إزالة الأزرار
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
-      chat_id: chatId,
-      message_id: query.message.message_id
+      chat_id: chatId, message_id: query.message.message_id
     });
 
-    // إشعار الوكيل
     bot.sendMessage(chatId,
       `✅ *تم قبول طلب السحب بنجاح*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
@@ -68,7 +64,6 @@ bot.on('callback_query', async (query) => {
       `━━━━━━━━━━━━━━━━`,
       { parse_mode: 'Markdown' });
 
-    // إشعار اللاعب
     bot.sendMessage(player.telegram_id,
       `✅ *تم قبول طلب السحب*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
@@ -80,20 +75,13 @@ bot.on('callback_query', async (query) => {
       { parse_mode: 'Markdown' });
 
   } else {
-    // رفض الطلب
     await updateRequestStatus(requestId, 'rejected');
-
     bot.editMessageReplyMarkup({ inline_keyboard: [] }, {
-      chat_id: chatId,
-      message_id: query.message.message_id
+      chat_id: chatId, message_id: query.message.message_id
     });
-
-    // إشعار الوكيل
     bot.sendMessage(chatId,
       `❌ *تم رفض طلب السحب*\n🆔 *رقم الطلب:* \`${requestId}\``,
       { parse_mode: 'Markdown' });
-
-    // إشعار اللاعب
     bot.sendMessage(player.telegram_id,
       `❌ *تم رفض طلب السحب*\n\n` +
       `🆔 *رقم الطلب:* \`${requestId}\`\n` +
@@ -117,8 +105,33 @@ bot.on('message', async (msg) => {
   const text    = msg.text.trim();
   const session = getSession(chatId);
 
+  // ✅ إلغاء أي جلسة عند استقبال أمر / أو كلمة إلغاء
+  if (text.startsWith('/') || text === 'الغاء' || text === 'إلغاء') {
+    deleteSession(chatId);
+    if (text.startsWith('/')) return; // اتركه لـ index.js
+    return bot.sendMessage(chatId,
+      "❎ *تم إلغاء العملية الحالية*",
+      { parse_mode: 'Markdown', ...agentKeyboard() });
+  }
+
   // تجاهل إن كانت الجلسة تابعة لـ handler آخر
   if (session && !session.action?.startsWith('agent_')) return;
+
+  // ──────────────────────────────────────────
+  // 👤 بياناتي
+  // ──────────────────────────────────────────
+  if (text === "👤 بياناتي") {
+    return bot.sendMessage(chatId,
+      `👤 *بيانات حسابك في SpinX*\n\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `📛 *الاسم الكامل:* ${user.full_name || 'غير متوفر'}\n` +
+      `🆔 *ايدي حسابك:* \`${user.unique_id}\`\n` +
+      `📱 *رقم الهاتف:* ${user.phone || 'غير متوفر'}\n` +
+      `💼 *رصيدك الحالي:* ${formatUSD(user.balance)}\n` +
+      `🏷️ *نوع الحساب:* وكيل\n` +
+      `━━━━━━━━━━━━━━━━`,
+      { parse_mode: 'Markdown' });
+  }
 
   // ──────────────────────────────────────────
   // 📥 طلب رصيد من الإدارة
@@ -133,21 +146,13 @@ bot.on('message', async (msg) => {
   if (session?.action === 'agent_request_balance') {
     const amount = Number(text);
     if (isNaN(amount) || amount <= 0) {
-      return bot.sendMessage(chatId, "❌ مبلغ غير صحيح، أرسل رقماً موجباً");
+      return bot.sendMessage(chatId, "❌ مبلغ غير صحيح، أرسل رقماً موجباً أو اكتب *إلغاء* للإلغاء", { parse_mode: 'Markdown' });
     }
 
     const requestId = generateRequestId();
-    await saveRequest({
-      request_id: requestId,
-      user_id:    user.id,
-      agent_id:   user.id,
-      type:       'deposit',
-      amount
-    });
-
+    await saveRequest({ request_id: requestId, user_id: user.id, agent_id: user.id, type: 'deposit', amount });
     deleteSession(chatId);
 
-    // إشعار الوكيل
     bot.sendMessage(chatId,
       `📨 *تم إرسال الطلب للإدارة بنجاح*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
@@ -159,7 +164,6 @@ bot.on('message', async (msg) => {
       `━━━━━━━━━━━━━━━━`,
       { parse_mode: 'Markdown' });
 
-    // إشعار الأدمن مع أزرار قبول/رفض
     bot.sendMessage(ADMIN_ID,
       `📥 *طلب رصيد جديد من وكيل*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
@@ -169,10 +173,7 @@ bot.on('message', async (msg) => {
       `🆔 *رقم الطلب:* \`${requestId}\`\n` +
       `📅 *التاريخ:* ${formatDate()}\n` +
       `━━━━━━━━━━━━━━━━`,
-      {
-        parse_mode: 'Markdown',
-        ...approveRejectKeyboard('agentreq', requestId)
-      });
+      { parse_mode: 'Markdown', ...approveRejectKeyboard('agentreq', requestId) });
 
     return;
   }
@@ -190,10 +191,8 @@ bot.on('message', async (msg) => {
   if (session?.action === 'agent_transfer' && !session?.transfer_player) {
     const player = await getUserByUniqueId(text);
     if (!player || player.role !== 'player') {
-      return bot.sendMessage(chatId, "❌ اللاعب غير موجود، تأكد من الايدي");
+      return bot.sendMessage(chatId, "❌ اللاعب غير موجود، تأكد من الايدي أو اكتب *إلغاء*", { parse_mode: 'Markdown' });
     }
-
-    // تحقق أن اللاعب تابع لهذا الوكيل
     if (player.agent_id !== user.id) {
       return bot.sendMessage(chatId, "⚠️ هذا اللاعب ليس في فريقك");
     }
@@ -214,10 +213,9 @@ bot.on('message', async (msg) => {
   if (session?.action === 'agent_transfer' && session?.transfer_player) {
     const amount = Number(text);
     if (isNaN(amount) || amount <= 0) {
-      return bot.sendMessage(chatId, "❌ مبلغ غير صحيح، أرسل رقماً موجباً");
+      return bot.sendMessage(chatId, "❌ مبلغ غير صحيح، أرسل رقماً موجباً أو اكتب *إلغاء*", { parse_mode: 'Markdown' });
     }
 
-    // جلب أحدث بيانات الوكيل للتحقق من الرصيد
     const freshAgent = await getUserByTelegramId(msg.from.id);
     if (freshAgent.balance < amount) {
       return bot.sendMessage(chatId,
@@ -230,7 +228,6 @@ bot.on('message', async (msg) => {
     const updatedPlayer = await updateBalance(player.id,  amount);
     deleteSession(chatId);
 
-    // إشعار الوكيل
     bot.sendMessage(chatId,
       `✅ *تمت عملية تحويل الرصيد بنجاح*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
@@ -241,7 +238,6 @@ bot.on('message', async (msg) => {
       `━━━━━━━━━━━━━━━━`,
       { parse_mode: 'Markdown' });
 
-    // إشعار اللاعب
     bot.sendMessage(player.telegram_id,
       `💰 *تحديث على رصيدك*\n\n` +
       `━━━━━━━━━━━━━━━━\n` +
@@ -278,14 +274,9 @@ bot.on('message', async (msg) => {
     const totalRequested   = myRequests.reduce((s, r) => s + Number(r.amount), 0);
     const totalTransferred = myTransfers.reduce((s, r) => s + Number(r.amount), 0);
 
-    let playersList = '';
-    if (myPlayers.length > 0) {
-      playersList = myPlayers
-        .map(p => `  • ${p.full_name || 'بدون اسم'} | \`${p.unique_id}\``)
-        .join('\n');
-    } else {
-      playersList = '  لا يوجد لاعبون بعد';
-    }
+    const playersList = myPlayers.length > 0
+      ? myPlayers.map(p => `  • ${p.full_name || 'بدون اسم'} | \`${p.unique_id}\``).join('\n')
+      : '  لا يوجد لاعبون بعد';
 
     return bot.sendMessage(chatId,
       `📊 *إحصائياتك — SpinX*\n\n` +
