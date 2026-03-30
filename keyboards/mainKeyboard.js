@@ -43,6 +43,7 @@ function agentKeyboard() {
   return {
     reply_markup: {
       keyboard: [
+        [{ text: "🎰 العب الآن", web_app: { url: "https://memory-recall--mohamdbarood88.replit.app" } }],
         ["📥 طلب رصيد من الإدارة", "💸 تحويل رصيد للاعب"],
         ["💰 رصيدي", "📊 إحصائياتي"],
         ["👤 بياناتي"]
