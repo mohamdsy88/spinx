@@ -56,7 +56,7 @@ bot.onText(/\/start/, async (msg) => {
       { parse_mode: 'Markdown', ...playerKeyboard() });
   }
 
-  // 🆕 مستخدم جديد — عرض زر التسجيل
+  // 🆕 مستخدم جديد
   return bot.sendMessage(chatId,
     `🎰 *مرحباً بك في SpinX!*\n\n` +
     `━━━━━━━━━━━━━━━━\n` +
@@ -70,10 +70,10 @@ bot.onText(/\/start/, async (msg) => {
 console.log('🚀 SpinX Bot is running...');
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  إزالة المستطيل الأزرق (Menu Button)
+//  إزالة المستطيل الأزرق نهائياً
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const menuBtnPayload = JSON.stringify({ menu_button: { type: 'commands' } });
+const menuPayload = JSON.stringify({ menu_button: { type: 'default' } });
 
 const menuReq = https.request(
   {
@@ -82,19 +82,21 @@ const menuReq = https.request(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(menuBtnPayload)
+      'Content-Length': Buffer.byteLength(menuPayload)
     }
   },
   (res) => {
     let body = '';
     res.on('data', chunk => body += chunk);
     res.on('end', () => {
-      const result = JSON.parse(body);
-      if (result.ok) console.log('✅ تم إزالة زر القائمة الأزرق بنجاح');
-      else console.log('⚠️ فشل إزالة الزر الأزرق:', result.description);
+      try {
+        const result = JSON.parse(body);
+        if (result.ok) console.log('✅ تم إزالة المستطيل الأزرق بنجاح');
+        else console.log('⚠️ فشل إزالة الزر الأزرق:', result.description);
+      } catch (e) { console.log('⚠️ خطأ في تحليل الرد:', e.message); }
     });
   }
 );
-menuReq.on('error', (e) => console.log('⚠️ خطأ في إزالة الزر الأزرق:', e.message));
-menuReq.write(menuBtnPayload);
+menuReq.on('error', (e) => console.log('⚠️ خطأ في طلب إزالة الزر:', e.message));
+menuReq.write(menuPayload);
 menuReq.end();
